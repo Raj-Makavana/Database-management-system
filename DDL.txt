@@ -1,0 +1,175 @@
+CREATE SCHEMA IPL;
+
+SET search_path TO ipl; 
+
+
+CREATE TABLE stadium(
+	SName VARCHAR(30)  PRIMARY KEY,
+	capacity INTEGER,
+	city VARCHAR(10),
+	state VARCHAR(15)
+);
+
+SELECT * FROM stadium;
+
+CREATE TABLE teams(
+	TID VARCHAR(5) PRIMARY KEY,
+	HomeGroundName VARCHAR(30) REFERENCES stadium(SName) ON DELETE CASCADE,
+	BrandValue INT
+);
+SELECT * FROM teams;
+
+CREATE TABLE Teams_Names(
+	TID VARCHAR(5) PRIMARY KEY,
+	Tname VARCHAR(30),
+	FOREIGN KEY (TID) REFERENCES teams(TID) ON DELETE CASCADE
+);
+SELECT * FROM teams_names;
+
+CREATE TABLE coach(
+	CName VARCHAR(30) PRIMARY KEY,
+	speciality VARCHAR(10),
+	TID VARCHAR(5) REFERENCES teams(TID) ON DELETE CASCADE 
+	
+);
+SELECT * FROM coach;
+
+CREATE TABLE owners(
+	OName VARCHAR(30) PRIMARY KEY,
+	shareholding FLOAT,
+	TID VARCHAR(5) REFERENCES teams(TID) ON DELETE CASCADE 
+);
+SELECT * FROM owners;
+
+CREATE TABLE players(
+	UID CHAR(7) PRIMARY KEY,
+	pname VARCHAR(30),
+	bDate DATE,
+	nationality VARCHAR(20),
+	TotalRun INT,
+	TotalWicket INT,
+	Roll VARCHAR(10)
+);
+SELECT * FROM players;
+
+CREATE TABLE jerseyNo(
+	UID CHAR(7) ,
+	jerseyNo SMALLINT ,
+	primary key (UID,jerseyNo),
+	Foreign Key (UID)REFERENCES Players(UID) ON DELETE CASCADE
+);
+SELECT * FROM jerseyNo;
+
+--drop table sold_players cascade;
+CREATE TABLE sold_players(
+    UID CHAR(7) REFERENCES players(UID) ON DELETE CASCADE,
+    year SMALLINT,
+    TID VARCHAR(5),
+    Base_Price FLOAT,
+    Sold_Price FLOAT,
+    PRIMARY KEY (UID, year,TID),
+    CONSTRAINT fk_tid FOREIGN KEY (TID) REFERENCES teams(TID) ON DELETE CASCADE
+	
+);
+
+SELECT * FROM sold_players;
+
+
+CREATE TABLE umpires(
+    U_ID SMALLINT Primary key,
+    Uname VARCHAR(20),
+	Speciality VARCHAR(10)
+);
+SELECT * FROM umpires;
+
+
+CREATE TABLE Matches (
+    Date DATE NOT NULL,
+    T1 VARCHAR(5) REFERENCES teams(TID) ON DELETE CASCADE,
+    T2 VARCHAR(5) REFERENCES teams(TID) ON DELETE CASCADE,
+    CID1 CHAR(7) REFERENCES players(UID) ON DELETE CASCADE,
+    VCID1 CHAR(7) REFERENCES players(UID) ON DELETE CASCADE,
+    CID2 CHAR(7) REFERENCES players(UID) ON DELETE CASCADE,
+    VCID2 CHAR(7) REFERENCES players(UID) ON DELETE CASCADE,
+    PRIMARY KEY (Date,T1,T2)   
+);
+SELECT * FROM matches;
+
+
+CREATE TABLE umpiring(
+	T1 VARCHAR(5),
+	T2 VARCHAR(5),
+	Date DATE,
+	U_ID SMALLINT REFERENCES umpires(U_ID) ON DELETE CASCADE,
+	Foreign Key (Date,T1,T2)REFERENCES matches(Date,T1,T2) ON DELETE CASCADE,
+	Primary key(T1,T2,Date,U_ID)
+);
+SELECT * FROM umpiring;
+
+CREATE TABLE result (
+    
+    Date DATE,
+	T1 VARCHAR(5),
+	T2 VARCHAR(5),
+	
+	Toss VARCHAR(5) REFERENCES teams(TID) ON DELETE CASCADE, -- 0 T1  & 1 for T2
+	TossResult BOOLEAN, -- 0 for ball  and 1 for bat
+	
+	T1_run INT,
+	T1_Wicket SMALLINT,
+	T1_Overs FLOAT,
+	T1_runrate FLOAT, --derived
+
+	T2_run INT,
+	T2_Wicket SMALLINT,
+	T2_Overs FLOAT,
+	T2_runrate FLOAT, --derived
+	
+	T1_Net_RunRate FLOAT , --derived 
+	T2_Net_RunRate FLOAT , --derived 
+	Winner VARCHAR(5) REFERENCES teams(TID) ON DELETE CASCADE,
+	Man_Of_The_Match CHAR(7) REFERENCES players(UID) ON DELETE CASCADE,
+	Primary key (date,T1,T2) ,
+	Foreign Key (date,T1,T2)REFERENCES matches(date,T1,T2) ON DELETE CASCADE
+);
+SELECT * FROM result;
+
+
+CREATE TABLE bowling_performence(
+    UID CHAR(7), 
+    T1 VARCHAR(5),
+	T2 VARCHAR(5),
+    Date DATE,
+    over FLOAT,
+    wicket SMALLINT,
+    Given_run SMALLINT,
+    Economy FLOAT,  -- Derived Attribute
+    PRIMARY KEY (UID,T1,T2, Date),
+    FOREIGN KEY (UID) REFERENCES players(UID) ON DELETE CASCADE,
+    FOREIGN KEY (Date,T1,T2) REFERENCES Matches(Date,T1,T2) ON DELETE CASCADE
+);
+select * from bowling_performence;
+
+
+CREATE TABLE batting_performence(
+    UID CHAR(7), 
+    T1 VARCHAR(5),
+	T2 VARCHAR(5),
+    Date DATE,
+    Run SMALLINT,
+	Balls SMALLINT,
+	StrikeRate FLOAT, --derived
+    Fours SMALLINT,
+    sixs SMALLINT,
+    out VARCHAR(10), 
+	ByWhom CHAR(7),
+	bowler CHAR(7),
+    PRIMARY KEY (UID, T1,T2, Date),
+    FOREIGN KEY (UID) REFERENCES players(UID) ON DELETE CASCADE,
+	FOREIGN KEY (Bywhom) REFERENCES players(UID) ON DELETE CASCADE,
+	FOREIGN KEY (bowler) REFERENCES players(UID) ON DELETE CASCADE,
+    FOREIGN KEY ( Date,T1,T2) REFERENCES Matches(Date,T1,T2) ON DELETE CASCADE
+);
+select * from batting_performence;
+
+

@@ -1,0 +1,329 @@
+--1. POINT TABLE FOR IPL2024
+-- SET search_path TO ipl; 
+SELECT 
+    s2.tid,
+	14 AS Matches,
+    s1.points AS win,
+ 	(14 - s1.points-
+	 	CASE 
+            WHEN s1.no_result_matches IS NULL THEN 0 
+            ELSE s1.no_result_matches 
+        END ) AS LOSS,
+    (s1.points * 2 + 
+        CASE 
+            WHEN s1.no_result_matches IS NULL THEN 0 
+            ELSE s1.no_result_matches 
+        END
+    ) AS POINTS,
+	
+	s2.net_runrate/10 AS NRR
+FROM (
+    SELECT p1.tid, p1.points, p2.no_result_matches
+    FROM (
+        SELECT winner AS tid, COUNT(date) AS points
+        FROM (
+            SELECT * FROM result WHERE EXTRACT(YEAR FROM date) = 2024 LIMIT 70
+        ) AS j1
+        WHERE winner IS NOT NULL
+        GROUP BY winner
+    ) AS p1
+    LEFT JOIN (
+        SELECT tid, SUM(cnt) AS no_result_matches
+        FROM (
+            SELECT t1 AS tid, COUNT(*) AS cnt
+            FROM result
+            WHERE winner IS NULL
+            GROUP BY t1
+            UNION ALL
+            SELECT t2 AS tid, COUNT(*) AS cnt
+            FROM result
+            WHERE winner IS NULL
+            GROUP BY t2
+        ) AS combined
+        GROUP BY tid
+    ) AS p2 ON p1.tid = p2.tid
+
+    UNION
+
+    SELECT p2.tid, p1.points, p2.no_result_matches
+    FROM (
+        SELECT winner AS tid, COUNT(date) AS points
+        FROM (
+            SELECT * FROM result WHERE EXTRACT(YEAR FROM date) = 2024 LIMIT 70
+        ) AS j1
+        WHERE winner IS NOT NULL
+        GROUP BY winner
+    ) AS p1
+    RIGHT JOIN (
+        SELECT tid, SUM(cnt) AS no_result_matches
+        FROM (
+            SELECT t1 AS tid, COUNT(*) AS cnt
+            FROM result
+            WHERE winner IS NULL
+            GROUP BY t1
+            UNION ALL
+            SELECT t2 AS tid, COUNT(*) AS cnt
+            FROM result
+            WHERE winner IS NULL
+            GROUP BY t2
+        ) AS combined
+        GROUP BY tid
+    ) AS p2 ON p1.tid = p2.tid
+) AS s1
+JOIN (
+    SELECT r1.t1 AS tid, r1.n1 + r2.n2 AS net_runrate
+    FROM (
+        SELECT t1, SUM(t1_net_runrate) AS n1
+        FROM (
+            SELECT * FROM result WHERE EXTRACT(YEAR FROM date) = 2024 LIMIT 70
+        ) AS j2
+        GROUP BY t1
+    ) AS r1
+    JOIN (
+        SELECT t2, SUM(t2_net_runrate) AS n2
+        FROM (
+            SELECT * FROM result WHERE EXTRACT(YEAR FROM date) = 2024 LIMIT 70
+        ) AS j3
+        GROUP BY t2
+    ) AS r2 ON r1.t1 = r2.t2
+) AS s2
+ON s1.tid = s2.tid
+ORDER BY POINTS DESC, net_runrate DESC;
+
+
+
+--2 Orange cap holder race for perticular year(most run scorer) : 
+SELECT * FROM 
+(
+SELECT uid, pname , matches,runs , runs/matches AS avg_score 
+FROM
+	(
+	SELECT uid , COUNT(date) AS Matches ,SUM(run) AS RUNS 
+	FROM 
+	(SELECT * FROM batting_performence WHERE run IS NOT NULL and EXTRACT(YEAR FROM date) = 2024) as r GROUP BY uid
+	) as a
+ NATURAL JOIN players  WHERE matches < 18
+ ) as player
+ NATURAL JOIN
+ (SELECT UID , TID FROM sold_players where year = 2024 ) AS team  ORDER BY RUNS DESC ,  LIMIT 5;
+
+ -- 3 Purple  Cap Holder race 
+ SELECT * FROM 
+(
+SELECT uid, pname , matches, wickets ,eco/matches AS economy 
+FROM
+	(
+	SELECT uid , COUNT(date) AS Matches ,SUM(wicket) AS wickets ,SUM(economy) as eco
+	FROM 
+	(SELECT * FROM bowling_performence WHERE wicket IS NOT NULL and EXTRACT(YEAR FROM date) = 2024) as r GROUP BY uid
+	) as a
+ NATURAL JOIN players  WHERE matches < 18
+ ) as player
+ NATURAL JOIN
+ (SELECT UID , TID FROM sold_players where year = 2024 ) AS team  ORDER BY WICKETS DESC,economy ASC LIMIT 5;
+
+ --4. most fifty or centuries
+ SELECT uid,pname,fifty,tid FROM
+ (SELECT uid,count(*) AS FIFTY FROM batting_performence WHERE run > 99 and EXTRACT(YEAR FROM date)=2024 GROUP BY uid) AS b
+ NATURAL JOIN 
+ players
+ NATURAL JOIN
+ (SELECT UID,TID FROM sold_players WHERE year = 2024) as s
+ ORDER BY fifty DESC LIMIT 5;
+ 
+ 
+ --5. Most Fours and Sixes 
+ SELECT uid,pname,fours,tid FROM
+ 	(SELECT uid,sum(FOURS) AS FOURS 
+	 FROM batting_performence 
+	 WHERE FOURS IS NOT NULL and EXTRACT(YEAR FROM date)=2024 GROUP BY uid) AS b
+ NATURAL JOIN 
+ players
+ NATURAL JOIN
+ (SELECT UID,TID FROM sold_players WHERE year = 2024) as s
+ ORDER BY FOURS DESC LIMIT 5;
+ 
+--6 BEST BATTING
+SELECT T1,T2,PNAME,run,balls,strikerate,TID as playerTeam  
+FROM
+(SELECT * FROM batting_performence WHERE run IS NOT NULL) AS b
+NATURAL JOIN
+players
+NATURAL JOIN
+(SELECT UID,TID FROM sold_players WHERE year = 2024) as s
+ORDER BY run DESC,strikerate DESC LIMIT 5;
+
+--7 BEST BOWING
+SELECT T1,T2,PNAME,wicket,over,given_run,economy,TID as playerTeam  
+FROM
+(SELECT * FROM bowling_performence WHERE wicket IS NOT NULL) AS b
+NATURAL JOIN
+players
+NATURAL JOIN
+(SELECT UID,TID FROM sold_players WHERE year = 2024) as s
+ORDER BY wicket DESC,economy ASC LIMIT 5;
+
+--8 SUPER STRIKER 
+SELECT T1,T2,PNAME,run,balls,strikerate,TID as playerTeam  
+FROM
+(SELECT * FROM batting_performence WHERE run IS NOT NULL and balls > 9) AS b
+NATURAL JOIN
+players
+NATURAL JOIN
+(SELECT UID,TID FROM sold_players WHERE year = 2024) as s
+ORDER BY strikerate DESC LIMIT 5;
+
+SELECT * FROM RESULT;
+
+
+--9 top 5 matches (highest score in first  innings)
+SELECT 
+    date,
+    -- Team that batted first
+    CASE 
+        WHEN tossresult = true THEN 
+            CASE WHEN t1 = toss THEN t1 ELSE t2 END
+        ELSE 
+            CASE WHEN t1 = toss THEN t2 ELSE t1 END
+    END AS team,
+
+    -- Corresponding score
+    CASE 
+        WHEN tossresult = true THEN 
+            CASE WHEN t1 = toss THEN t1_run ELSE t2_run END
+        ELSE 
+            CASE WHEN t1 = toss THEN t2_run ELSE t1_run END
+    END AS score,
+
+    -- Opponent team
+    CASE 
+        WHEN 
+            (CASE 
+                WHEN tossresult = true THEN 
+                    CASE WHEN t1 = toss THEN t1 ELSE t2 END
+                ELSE 
+                    CASE WHEN t1 = toss THEN t2 ELSE t1 END
+            END) = t1 THEN t2
+        ELSE t1
+    END AS vs
+
+FROM result
+WHERE toss IS NOT NULL ORDER BY SCORE DESC LIMIT 5;
+
+
+-- 10 top 5 matches (Successful run chase)
+SELECT *
+FROM (
+    SELECT
+        date,
+        CASE 
+            WHEN tossresult = true THEN 
+                CASE WHEN t1 = toss THEN t2 ELSE t1 END
+            ELSE 
+                CASE WHEN t1 = toss THEN t1 ELSE t2 END
+        END AS cteam,
+        
+        CASE 
+            WHEN tossresult = true THEN 
+                CASE WHEN t1 = toss THEN t2_run ELSE t1_run END
+            ELSE 
+                CASE WHEN t1 = toss THEN t2_run ELSE t2_run END
+        END AS chasing_score,
+        
+        CASE 
+            WHEN 
+                (CASE 
+                    WHEN tossresult = true THEN 
+                        CASE WHEN t1 = toss THEN t2 ELSE t1 END
+                    ELSE 
+                        CASE WHEN t1 = toss THEN t1 ELSE t2 END
+                END) = t1 THEN t2
+            ELSE t1
+        END AS dteam,
+        
+        CASE 
+            WHEN 
+                (CASE 
+                    WHEN tossresult = true THEN 
+                        CASE WHEN t1 = toss THEN t2_run ELSE t1_run END
+                    ELSE 
+                        CASE WHEN t1 = toss THEN t2_run ELSE t2_run END
+                END) = t1_run THEN t2_run
+            ELSE t1_run
+        END AS defending_score
+    FROM result
+    WHERE toss IS NOT NULL
+) AS sub
+WHERE chasing_score > defending_score
+ORDER BY defending_score DESC
+LIMIT 5;
+
+
+--11 Which team won most matches defending the target
+SELECT 
+    defending_team, 
+    COUNT(*) AS matches_played, 
+    SUM(CASE WHEN defend_score > chase_score THEN 1 ELSE 0 END) AS wins
+FROM (
+    SELECT 
+        -- who batted first
+        CASE 
+            WHEN tossresult = TRUE THEN 
+                CASE WHEN t1 = toss THEN t1 ELSE t2 END
+            ELSE 
+                CASE WHEN t1 = toss THEN t2 ELSE t1 END
+        END AS defending_team,
+
+        -- defending team’s score
+        CASE 
+            WHEN tossresult = TRUE THEN 
+                CASE WHEN t1 = toss THEN t1_run ELSE t2_run END
+            ELSE 
+                CASE WHEN t1 = toss THEN t2_run ELSE t1_run END
+        END AS defend_score,
+
+        -- chasing team’s score
+        CASE 
+            WHEN tossresult = TRUE THEN 
+                CASE WHEN t1 = toss THEN t2_run ELSE t1_run END
+            ELSE 
+                CASE WHEN t1 = toss THEN t1_run ELSE t2_run END
+        END AS chase_score
+    FROM result
+    WHERE toss IS NOT NULL
+) AS sub
+GROUP BY defending_team
+ORDER BY wins DESC;
+
+--12 Get total runs scored by each team in IPL 2024
+SELECT t1 AS Team ,m1+m2 AS played_Matches ,run1+run2 AS Total_Runs
+FROM
+(SELECT t1 , SUM(t1_run) AS run1,count(*) as m2 FROM result WHERE EXTRACT(year FROM date) = 2024 AND t1_run IS NOT NULL GROUP BY t1) AS r1
+JOIN 
+(SELECT t2 , SUM(t2_run) AS run2,count(*) as m1 FROM result WHERE EXTRACT(year FROM date) = 2024 AND t2_run IS NOT NULL GROUP BY t2) AS r2
+ON (t1 = t2) ORDER BY Total_Runs DESC;
+
+--13 most Man of the Match awards
+SELECT uid,pname,M AS Man_of_the_match
+FROM
+	(SELECT Man_of_the_match AS UID ,count(*) AS M 
+	FROM Result WHERE Man_Of_the_match IS NOT NULL AND EXTRACT(year FROM date)=2024 
+	GROUP BY man_of_the_match
+	) AS r
+NATURAL JOIN 
+	players
+ORDER BY Man_of_the_match DESC;
+
+--14 Sigle owner Team
+SELECT distinct tid AS ID,tname AS NAME ,oname AS Owner
+FROM
+teams_names NATURAL JOIN
+Teams NATURAL JOIN 
+owners WHERE shareholding = 100;
+
+--15 Batting performnece for a perticular player in a specific season 
+SELECT Pname AS Name , t1,t2,date,run,balls,fours,sixs
+FROM
+(SELECT * FROM batting_performence where uid = 'IPL0401') AS r
+NATURAL JOIN players;
+
